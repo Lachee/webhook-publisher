@@ -1,8 +1,8 @@
 import axios from 'axios';
 import crypto from 'crypto';
-import { PublishRequest } from "./entities.mjs";
+import ObjectId from 'node-time-uuid';
 
-export class Invoker {
+export class Executor {
 
     #privateKey;
     timeout = 3000;
@@ -66,5 +66,25 @@ export class Invoker {
         sign.write(payload);
         sign.end();
         return sign.sign(this.#privateKey, 'hex');
+    }
+}
+
+/** A event request that we need to publish */
+export class EventRequest {
+    
+    id;
+    timestamp;
+    hooks;
+    event;
+    author;
+    payload;
+
+    constructor(data) { 
+        this.id         = (new ObjectId()).toString();
+        this.hooks      = data.hooks; //data.hooks.map(h => h instanceof Hook ? h : new Hook(h));
+        this.event      = data.event;
+        this.author     = data.author;
+        this.payload    = data.payload;     
+        this.timestamp  = Date.now();
     }
 }
