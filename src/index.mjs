@@ -10,6 +10,9 @@ import { WebService, Credential } from './WebService.mjs';
 const privateKey    = fs.readFileSync(process.env.PRIVATE_KEY || 'keys/webhook-private.key');
 const executor      = new Executor(privateKey);
 
+if (process.env.USER_AGENT)
+    executor.userAgent = process.env.USER_AGENT;
+
 //Register the service
 const service       = new WebService(executor, process.env.PORT || 5000);
 service.addCredential(new Credential({ 

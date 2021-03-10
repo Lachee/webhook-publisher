@@ -1,28 +1,53 @@
 import axios from 'axios';
 import crypto from 'crypto';
 import ObjectId from 'node-time-uuid';
+import Queue from 'double-ended-queue';
 
 export class Executor {
 
-    #privateKey;
+    userAgent = 'WebhookPub/1.0';
     timeout = 3000;
+
+    #privateKey;
+    #queue;
+    #processing;
 
 
     constructor(privateKey) {
         this.#privateKey = privateKey;
+        this.#queue = new Queue();
+        this.#processing = false;
     }
 
     /** Enqueues a PublishRequest to be processed in the background */
     enqueue(request) {
-        // im to lazy to implement a queue, so we just invoke it and ignore the async
-        const _ = this.#invoke(request);
+        this.#queue.push(request);
+        this.tryProcessQueue();
+    }
+
+    /** Attempts to process the current queue. Returns true if the queue is processing*/
+    tryProcessQueue() {
+        if (this.#processing) {
+            console.log('Cannot process as we are waiting. Queue Size: ', this.#queue.length);
+            return true;
+        }
+
+        const request = this.#queue.pop();
+        if (request === undefined) return false;
+
+        console.log('Processing. Queue Size: ', this.#queue.length);
+        this.#process(request);
+        return this.#processing;
     }
 
     /** Invokes the request, calling all the webhook urls
      * @param { PublishRequest } request
      */
-    async #invoke(request) {
+    async #process(request) {
         console.log(`Invoking request ${request.id}`);
+
+        //We have started processing
+        this.#processing = true;
 
         //Build the string payload
         const data = {
@@ -35,11 +60,13 @@ export class Executor {
         const json      = JSON.stringify(data);
         const signature = this.#sign(json); 
         const headers = {
-            'Content-Type':     'application/json',
-            'X-Hook-Signature': signature,
-            'X-Hook-Event':     request.event,
-            'X-Hook-Time':      request.timestamp,
-            'X-Hook-ID':        request.id
+            'Content-Type':         'application/json',
+            'User-Agent':           this.userAgent,
+            'X-Hook-Signature':     signature,
+            'X-Hook-Event':         request.event,
+            'X-Hook-Author':        request.author,
+            'X-Hook-Time':          request.timestamp,
+            'X-Hook-ID':            request.id
         };
 
         let axiosReqs = [];
@@ -47,17 +74,25 @@ export class Executor {
         //Iterate over all the hosts, generating the appropriate requests
         for(let i in request.hooks) {
             const hook = request.hooks[i];
-            const url = hook;
-            console.log(`${request.id}: ${request.event} - ${url}`);
-            const req = axios.post(url, json, {
-                timeout: this.timeout, 
-                headers: headers, 
-            });   
-            axiosReqs.push(req);
+            try {
+                const url = hook;
+                console.log(`${request.id}: ${request.event} - ${url}`);
+                const req = axios.post(url, json, {
+                    timeout: this.timeout, 
+                    headers: headers, 
+                });   
+                axiosReqs.push(req);
+            }catch(e) {
+                console.error(`failed executing hook:`, e, hook);
+            }
         }
 
         //Wait all
-        return await axios.all(axiosReqs);
+        await axios.all(axiosReqs);
+        this.#processing = false;
+
+        //Attempt the queue again
+        this.tryProcessQueue();
     }
 
     /** Signs the payload */
@@ -80,11 +115,15 @@ export class EventRequest {
     payload;
 
     constructor(data) { 
-        this.id         = (new ObjectId()).toString();
+        this.id         = data.id || (new ObjectId()).toString();
         this.hooks      = data.hooks; //data.hooks.map(h => h instanceof Hook ? h : new Hook(h));
         this.event      = data.event;
         this.author     = data.author;
         this.payload    = data.payload;     
         this.timestamp  = Date.now();
+
+        if (typeof this.author !== 'string') throw new Error('author must be a string');
+        if (typeof this.event !== 'string') throw new Error('event must be a string');
+        if (typeof this.id !== 'string') throw new Error('id must be a string');
     }
 }
