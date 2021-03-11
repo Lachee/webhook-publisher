@@ -2,8 +2,8 @@ import axios from 'axios';
 import crypto from 'crypto';
 import ObjectId from 'node-time-uuid';
 import Queue from 'double-ended-queue';
-
-export class Executor {
+import { EventEmitter } from 'events';
+export class Executor extends EventEmitter {
 
     userAgent = 'WebhookPub/1.0';
     timeout = 3000;
@@ -12,8 +12,8 @@ export class Executor {
     #queue;
     #processing;
 
-
     constructor(privateKey) {
+        super();
         this.#privateKey = privateKey;
         this.#queue = new Queue();
         this.#processing = false;
@@ -22,6 +22,7 @@ export class Executor {
     /** Enqueues a PublishRequest to be processed in the background */
     enqueue(request) {
         this.#queue.push(request);
+        this.emit('queued', request);
         this.tryProcessQueue();
     }
 
@@ -34,6 +35,7 @@ export class Executor {
 
         const request = this.#queue.pop();
         if (request === undefined) return false;
+        this.emit('dequeued', request);
 
         console.log('Processing. Queue Size: ', this.#queue.length);
         this.#process(request);
@@ -41,13 +43,14 @@ export class Executor {
     }
 
     /** Invokes the request, calling all the webhook urls
-     * @param { PublishRequest } request
+     * @param { EventRequest } request
      */
     async #process(request) {
         console.log(`Invoking request ${request.id}`);
 
         //We have started processing
         this.#processing = true;
+        this.emit('beforeExecuted', request);
 
         //Build the string payload
         const data = {
@@ -88,10 +91,11 @@ export class Executor {
         }
 
         //Wait all
-        await axios.all(axiosReqs);
-        this.#processing = false;
+        const responses = await axios.all(axiosReqs);
 
-        //Attempt the queue again
+        //Clean up and try again.
+        this.#processing = false;
+        this.emit('executed', request, responses);
         this.tryProcessQueue();
     }
 

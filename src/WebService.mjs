@@ -47,6 +47,13 @@ export class WebService {
         console.log(`Listening on http://localhost:${this.#port}/`);
     }
 
+    /** Stops accepting new services */
+    stop() {
+        if (this.#server == null) throw Error('Server already stopped');
+        this.#server.stop();
+        this.#server = null;
+    }
+
     /** Validates the request and publishes it to the invoker */
     async #enqueueEvent(data) {
         const req = new EventRequest(data);

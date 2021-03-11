@@ -3,6 +3,7 @@ dotenv.config()
 
 import fs from 'fs';
 import { Executor } from './Executor.mjs';
+import { RedisService } from './RedisService.mjs';
 import { WebService, Credential } from './WebService.mjs';
 
 
@@ -13,13 +14,22 @@ const executor      = new Executor(privateKey);
 if (process.env.USER_AGENT)
     executor.userAgent = process.env.USER_AGENT;
 
-//Register the service
-const service       = new WebService(executor, process.env.PORT || 5000);
-service.addCredential(new Credential({ 
-    name:       process.env.PUBLISHER_NAME || 'app',
-    publicKey:  fs.readFileSync(process.env.PUBLISHER_KEY || 'keys/publisher-public.key')
-}));
+switch(process.env.SERVICE || 'http') {
+    case 'http':
+        const webService = new WebService(executor, process.env.PORT || 5000);
+        webService.addCredential(new Credential({ 
+            name:       process.env.PUBLISHER_NAME || 'app',
+            publicKey:  fs.readFileSync(process.env.PUBLISHER_KEY || 'keys/publisher-public.key')
+        }));
+        webService.listen();
+        break;
 
-//Listen
-service.listen();
+    case 'redis':
+        const redisService = new RedisService(executor);
+        redisService.subscribe(process.env.REDIS_CHANNEL);
+        break;
 
+    default:
+        console.error(`Unkown service ${process.env.SERVICE}`);
+        break;
+}
