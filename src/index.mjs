@@ -4,13 +4,14 @@ dotenv.config()
 import fs from 'fs';
 import { Executor } from './Executor.mjs';
 
-import { RedisService, RedisHistory  } from './RedisService.mjs';
+import { RedisService } from './RedisService.mjs';
 import { WebService, Credential } from './WebService.mjs';
 
 
 //Register the executor
 const privateKey    = fs.readFileSync(process.env.PRIVATE_KEY || 'keys/webhook-private.key');
 const executor      = new Executor(privateKey);
+// executor.history = new RedisHistory(); // You can force the executor to use a redis instead
 
 if (process.env.USER_AGENT)
     executor.userAgent = process.env.USER_AGENT;
