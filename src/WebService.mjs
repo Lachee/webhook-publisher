@@ -1,4 +1,5 @@
 import http from 'http';
+import url from 'url';
 import crypto from 'crypto';
 import { EventRequest, Executor } from './Executor.mjs';
 
@@ -9,7 +10,8 @@ export class WebService {
     #credentials;
     #executor; 
 
-    endpoint = '/publish';
+    publishEndpoint = '/publish';
+    historyEndpoint = '/history';
 
     /**
      * Creates a new webservice
@@ -64,48 +66,26 @@ export class WebService {
     /** Handles a request from the http server and gives a response. */
     async #handleRequest(req, res) {
         try {
-            if (req.url === this.endpoint) {
-                // Validate: POST only
-                if (req.method != 'POST')
-                    return this.#respond(res, 405, { 'error': 'Method not allowed' });
-                
-                // Validate: Signature and Credentials
-                const signature = req.headers['x-signature'];
-                const credname  = req.headers['x-credential'];
-                if (!signature || !credname)
-                    return this.#respond(res, 400, { 'error': 'Missing X-Signature or X-Credential headers.' });
+            
+            // // Validate: Signature and Credentials
+            // const signature = req.headers['x-signature'];
+            // const credname  = req.headers['x-credential'];
+            // if (!signature || !credname)
+            //     return this.#respond(res, 400, { 'error': 'Missing X-Signature or X-Credential headers.' });
+            // 
+            // // Validate: Credentials
+            // const credential = this.#credentials[credname];
+            // if (!credential) 
+            //     return this.#respond(res, 401, { 'error': 'Invalid credentials' });
 
-                // Validate: Credentials
-                const credential = this.#credentials[credname];
-                if (!credential) 
-                    return this.#respond(res, 401, { 'error': 'Invalid credentials' });
-
-                // Validate: The Body
-                let body = await new Promise((resolve, reject) => {
-                    let contents = '';
-                    req.on('data', chunk => { contents += chunk.toString(); });                
-                    req.on('end', () => { resolve(contents) });
-                });
-                if (!body) 
-                    return this.#respond(res, 400, { 'error': 'Body is required' });
-
-                // Validate: The credential
-                if (!credential.verify(body, signature))
-                    return this.#respond(res, 400, { 'error': 'Invalid signature' });
-
-                // Validate: The JSON Payload
-                let eventRequestData = null;
-                try {  eventRequestData = JSON.parse(body); 
-                } catch(e) { return this.#respond(res, 422, { 'error': 'Invalid JSON payload' }); }
-                if (!eventRequestData) 
-                    return this.#respond(res, 400, { 'error': 'Body is required' })
-
-                // Enqueue the Event
-                const snowflake = await this.#enqueueEvent(eventRequestData);
-                if (snowflake == false) return this.#respond(res, 400, { 'error': 'Failed to process publication' });
-
-                // Return the ID
-                return this.#respond(res, 200, { 'id': snowflake });
+            //Determine the endpoint
+            const url = new URL(req.url, `http://${req.headers.host}`);
+            switch(url.pathname) {
+                default: break;
+                case this.publishEndpoint:
+                    return await this.#handlePublishRequest(req, res);
+                case this.historyEndpoint:
+                    return await this.#handleHistoryRequest(req, res);
             }
 
             //Send a 404 request otherwise.
@@ -114,6 +94,50 @@ export class WebService {
             //Catch any unhandled exceptions and return the message
             return this.#respond(res, 500, { 'error': error.message, 'stack': error.stack  });  
         }
+    }
+
+    async #handlePublishRequest(req, res) {
+        // Validate: POST only
+        if (req.method != 'POST')
+            return this.#respond(res, 405, { 'error': 'Method not allowed' });
+    
+        // Validate: The Bodyit
+        let body = await new Promise((resolve, reject) => {
+            let contents = '';
+            req.on('data', chunk => { contents += chunk.toString(); });                
+            req.on('end', () => { resolve(contents) });
+        });
+        if (!body) 
+            return this.#respond(res, 400, { 'error': 'Body is required' });
+
+        // Validate: The credential
+        if (!credential.verify(body, signature))
+            return this.#respond(res, 400, { 'error': 'Invalid signature' });
+
+        // Validate: The JSON Payload
+        let eventRequestData = null;
+        try {  eventRequestData = JSON.parse(body); 
+        } catch(e) { return this.#respond(res, 422, { 'error': 'Invalid JSON payload' }); }
+        if (!eventRequestData) 
+            return this.#respond(res, 400, { 'error': 'Body is required' })
+
+        // Enqueue the Event
+        const snowflake = await this.#enqueueEvent(eventRequestData);
+        if (snowflake == false) return this.#respond(res, 400, { 'error': 'Failed to process publication' });
+
+        // Return the ID
+        return this.#respond(res, 200, { 'id': snowflake });
+
+    }
+
+    async #handleHistoryRequest(req, res) {
+        // Validate: GET only
+        if (req.method != 'GET')
+            return this.#respond(res, 405, { 'error': 'Method not allowed' });
+        
+        const url = new URL(req.url, `http://${req.headers.host}`);
+        const search = url.searchParams.get('webhook');
+        return this.executor.history.get(search);    
     }
 
     /** Writes the JSON data out */

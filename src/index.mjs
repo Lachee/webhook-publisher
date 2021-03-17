@@ -27,6 +27,7 @@ switch(process.env.SERVICE || 'http') {
     case 'redis':
         const redisService = new RedisService(executor);
         redisService.subscribe(process.env.REDIS_CHANNEL);
+        //TODO: Change the executor's history to a RedisHistory
         break;
 
     default:

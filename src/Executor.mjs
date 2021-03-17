@@ -3,10 +3,12 @@ import crypto from 'crypto';
 import ObjectId from 'node-time-uuid';
 import Queue from 'double-ended-queue';
 import { EventEmitter } from 'events';
+import { History } from './History.mjs';
 export class Executor extends EventEmitter {
 
-    userAgent = 'WebhookPub/1.0';
-    timeout = 3000;
+    userAgent   = 'WebhookPub/1.0';
+    timeout     = 3000;
+    history     = null;
 
     #privateKey;
     #queue;
@@ -17,6 +19,7 @@ export class Executor extends EventEmitter {
         this.#privateKey = privateKey;
         this.#queue = new Queue();
         this.#processing = false;
+        this.history = new History();
     }
 
     /** Enqueues a PublishRequest to be processed in the background */
@@ -75,7 +78,7 @@ export class Executor extends EventEmitter {
         let axiosReqs = [];
 
         //Iterate over all the hosts, generating the appropriate requests
-        for(let i in request.hooks) {
+        for(let i of request.hooks) {
             const hook = request.hooks[i];
             try {
                 const url = hook;
@@ -90,8 +93,13 @@ export class Executor extends EventEmitter {
             }
         }
 
-        //Wait all
+        //Wait for the responses and put it in our hooklist
         const responses = await axios.all(axiosReqs);
+        for(let i of responses) {
+            const response = responses[i];
+            const hook = request.hooks[i];
+            this.history.push(hook, response);
+        }
 
         //Clean up and try again.
         this.#processing = false;
