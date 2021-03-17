@@ -3,7 +3,8 @@ dotenv.config()
 
 import fs from 'fs';
 import { Executor } from './Executor.mjs';
-import { RedisService } from './RedisService.mjs';
+
+import { RedisService, RedisHistory  } from './RedisService.mjs';
 import { WebService, Credential } from './WebService.mjs';
 
 

@@ -1,5 +1,6 @@
 import Redis from 'ioredis';
 import { EventRequest, Executor } from './Executor.mjs';
+import { History } from './History.mjs';
 export class RedisService {
 
     /** @var {Redis} redis the redis connection. */
@@ -24,6 +25,7 @@ export class RedisService {
         this.#redis     = redis || new Redis();
         this.#channels  = [];
         this.#callbacks = [];
+        this.#executor.history = new History(this.#redis);
 
         //Define the redis events
         const self = this;
@@ -99,5 +101,39 @@ export class RedisService {
         } catch(e) { 
             console.error('Something went wrong', e.message);
         }
+    }
+}
+
+export class RedisHistory extends History {
+        
+    /** @var {Redis} redis the redis connection. */
+    #redis;
+
+    prefix = '';
+    lifetime = 31 * 24 * 60 * 60;
+
+    constructor(redis, prefix = 'webhook:history:') {
+        super();
+        this.#redis = redis || new Redis();
+        this.prefix = prefix;
+    }
+
+    /** Pushes a new history object */
+    async push(url, response) {
+        const hash = this.prefix + this.hash(url);
+        await this.#redis.set(hash, JSON.stringify(response));
+        await this.#redis.expire(hash, this.lifetime);
+    }
+
+    /** Gets the history for a specific url or hash */
+    async get(url) {
+        const hash = this.prefix + (url.startsWith('http') ? this.hash(url) : url);
+        const str = await this.#redis.get(hash);
+        return JSON.parse(str);
+    }
+
+    /** Gets all the histroy */
+    getAll() {
+        return Promise.resolve([]);
     }
 }
