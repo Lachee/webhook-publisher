@@ -67,25 +67,28 @@ export class WebService {
     async #handleRequest(req, res) {
         try {
             
-            // // Validate: Signature and Credentials
-            // const signature = req.headers['x-signature'];
-            // const credname  = req.headers['x-credential'];
-            // if (!signature || !credname)
-            //     return this.#respond(res, 400, { 'error': 'Missing X-Signature or X-Credential headers.' });
-            // 
-            // // Validate: Credentials
-            // const credential = this.#credentials[credname];
-            // if (!credential) 
-            //     return this.#respond(res, 401, { 'error': 'Invalid credentials' });
+            let credential = null;
+            if (!process.env.NO_SECURITY) { //TODO: Remove this
+                // Validate: Signature and Credentials
+                const signature = req.headers['x-signature'];
+                const credname  = req.headers['x-credential'];
+                if (!signature || !credname)
+                    return this.#respond(res, 400, { 'error': 'Missing X-Signature or X-Credential headers.' });
+                
+                // Validate: Credentials
+                credential = this.#credentials[credname];
+                if (!credential) 
+                    return this.#respond(res, 401, { 'error': 'Invalid credentials' });
+            }
 
             //Determine the endpoint
             const url = new URL(req.url, `http://${req.headers.host}`);
             switch(url.pathname) {
                 default: break;
                 case this.publishEndpoint:
-                    return await this.#handlePublishRequest(req, res);
+                    return await this.#handlePublishRequest(req, res, credential);
                 case this.historyEndpoint:
-                    return await this.#handleHistoryRequest(req, res);
+                    return await this.#handleHistoryRequest(req, res, credential);
             }
 
             //Send a 404 request otherwise.
@@ -96,7 +99,7 @@ export class WebService {
         }
     }
 
-    async #handlePublishRequest(req, res) {
+    async #handlePublishRequest(req, res, credential) {
         // Validate: POST only
         if (req.method != 'POST')
             return this.#respond(res, 405, { 'error': 'Method not allowed' });
@@ -111,7 +114,7 @@ export class WebService {
             return this.#respond(res, 400, { 'error': 'Body is required' });
 
         // Validate: The credential
-        if (!credential.verify(body, signature))
+        if (credential && !credential.verify(body, signature))
             return this.#respond(res, 400, { 'error': 'Invalid signature' });
 
         // Validate: The JSON Payload
@@ -130,14 +133,15 @@ export class WebService {
 
     }
 
-    async #handleHistoryRequest(req, res) {
+    async #handleHistoryRequest(req, res, credential) {
         // Validate: GET only
         if (req.method != 'GET')
             return this.#respond(res, 405, { 'error': 'Method not allowed' });
         
         const url = new URL(req.url, `http://${req.headers.host}`);
         const search = url.searchParams.get('webhook');
-        return this.executor.history.get(search);    
+        const result = await this.#executor.history.getAll();
+        return this.#respond(res, 200, result);
     }
 
     /** Writes the JSON data out */

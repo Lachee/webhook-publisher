@@ -19,7 +19,8 @@ export class History {
 
     /** Gets all the histroy */
     getAll() {
-        return Promise.resolve(this.#history);
+        const h = this.#history;
+        return Promise.resolve(h);
     }
     
     /** Hashes the payload with md5 */

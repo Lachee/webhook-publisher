@@ -54,56 +54,58 @@ export class Executor extends EventEmitter {
         //We have started processing
         this.#processing = true;
         this.emit('beforeExecuted', request);
+        try {
 
-        //Build the string payload
-        const data = {
-            id:         request.id,
-            event:      request.event,
-            author:     request.author,
-            payload:    request.payload
-        };
+            //Build the string payload
+            const data = {
+                id:         request.id,
+                event:      request.event,
+                author:     request.author,
+                payload:    request.payload
+            };
 
-        const json      = JSON.stringify(data);
-        const signature = this.#sign(json); 
-        const headers = {
-            'Content-Type':         'application/json',
-            'User-Agent':           this.userAgent,
-            'X-Hook-Signature':     signature,
-            'X-Hook-Event':         request.event,
-            'X-Hook-Author':        request.author,
-            'X-Hook-Time':          request.timestamp,
-            'X-Hook-ID':            request.id
-        };
+            const json      = JSON.stringify(data);
+            const signature = this.#sign(json); 
+            const headers = {
+                'Content-Type':         'application/json',
+                'User-Agent':           this.userAgent,
+                'X-Hook-Signature':     signature,
+                'X-Hook-Event':         request.event,
+                'X-Hook-Author':        request.author,
+                'X-Hook-Time':          request.timestamp,
+                'X-Hook-ID':            request.id
+            };
 
-        let axiosReqs = [];
+            let axiosReqs = [];
 
-        //Iterate over all the hosts, generating the appropriate requests
-        for(let i of request.hooks) {
-            const hook = request.hooks[i];
-            try {
-                const url = hook;
-                console.log(`${request.id}: ${request.event} - ${url}`);
-                const req = axios.post(url, json, {
-                    timeout: this.timeout, 
-                    headers: headers, 
-                });   
-                axiosReqs.push(req);
-            }catch(e) {
-                console.error(`failed executing hook:`, e, hook);
+            //Iterate over all the hosts, generating the appropriate requests
+            for(const url of request.hooks) {
+                try {
+                    console.log(`${request.id}: ${request.event} - ${url}`);
+                    const req = axios.post(url, json, {
+                        timeout: this.timeout, 
+                        headers: headers, 
+                    });   
+                    axiosReqs.push(req);
+                } catch(e) {
+                    console.error(`failed executing hook:`, e, url);
+                }
             }
-        }
 
-        //Wait for the responses and put it in our hooklist
-        const responses = await axios.all(axiosReqs);
-        for(let i of responses) {
-            const response = responses[i];
-            const hook = request.hooks[i];
-            this.history.push(hook, response);
-        }
+            //Wait for the responses and put it in our hooklist
+            const responses = await axios.all(axiosReqs);
+            for(const i in responses) {
+                const response = responses[i];
+                const hook = request.hooks[i];
+                this.history.push(hook, { status: response.status, statusText: response.statusText, headers: response.headers });
+            }
+            this.emit('executed', request, responses);
 
-        //Clean up and try again.
-        this.#processing = false;
-        this.emit('executed', request, responses);
+        } finally {
+            this.#processing = false;
+        }
+        
+        //Try again
         this.tryProcessQueue();
     }
 
