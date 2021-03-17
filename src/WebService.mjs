@@ -2,6 +2,7 @@ import http from 'http';
 import url from 'url';
 import crypto from 'crypto';
 import { EventRequest, Executor } from './Executor.mjs';
+import { throws } from 'assert';
 
 export class WebService {
     
@@ -140,8 +141,15 @@ export class WebService {
         
         const url = new URL(req.url, `http://${req.headers.host}`);
         const search = url.searchParams.get('webhook');
-        const result = await this.#executor.history.getAll();
-        return this.#respond(res, 200, result);
+
+        if (search) {
+            const history = await this.#executor.history.get(search);
+            if (history) return this.#respond(res, 200, history);
+            return this.#respond(res, 404, { 'error': 'history not found' });
+        }
+
+        const completeHistory = await this.#executor.history.getAll();
+        return this.#respond(res, 200, completeHistory);
     }
 
     /** Writes the JSON data out */
