@@ -2,6 +2,7 @@ import dotenv from 'dotenv'
 dotenv.config()
 
 import fs from 'fs';
+import Redis from 'ioredis';
 import { Executor } from './Executor.mjs';
 import { RedisService } from './RedisService.mjs';
 import { WebService, Credential } from './WebService.mjs';
@@ -26,7 +27,8 @@ switch(serviceName) {
         break;
 
     case 'redis':
-        const redisService = new RedisService(executor);
+        const redis = new Redis(process.env.REDIS_PORT || 6379, process.env.REDIS_HOST || '127.0.0.1');
+        const redisService = new RedisService(executor, redis);
         redisService.subscribe(process.env.REDIS_CHANNEL);
         break;
 
