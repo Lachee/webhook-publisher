@@ -104,6 +104,16 @@ It's important that, as a consumer of the webhook, you verify that the signature
 The verify function must be equivilent of [Node.JS crypto.Sign](https://nodejs.org/api/crypto.html#crypto_class_sign). It uses a `SHA256` algorithm. 
 
 # Docker
-_coming soon_
 
-If you are able to help with the docker, i will be accepting any PRs to get it setup.
+### Build
+`docker build -t lachee/webhook-publisher`
+
+### Run
+See the sample `docker-run.sh` file. But basically:
+```sh
+docker run \
+    -p 7080:7080 \
+    --env-file "$(pwd)"/.env \
+    --mount type=bind,source="$(pwd)"/.keys,target=/usr/src/app/.keys,readonly \
+    -d lachee/webhook-publisher
+```
