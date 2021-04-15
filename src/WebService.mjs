@@ -72,8 +72,10 @@ export class WebService {
                 // Validate: Signature and Credentials
                 const signature = req.headers['x-signature'];
                 const credname  = req.headers['x-credential'];
-                if (!signature || !credname)
+                if (!signature || !credname) {
+                    console.log(req.headers);
                     return this.#respond(res, 400, { 'error': 'Missing X-Signature or X-Credential headers.' });
+                }
 
                 // Validate: Credentials
                 const credential = this.#credentials[credname];
@@ -120,6 +122,7 @@ export class WebService {
     #respond(res, statusCode, payload) {
         if (payload == null) throw new Error('Cannot have a null payload');
         const body = JSON.stringify(payload);
+        console.log('response:', statusCode, body);
         const length = body ? body.length : 0;
         res.writeHead(statusCode, {
             'Content-Length': length,
