@@ -3,13 +3,13 @@ dotenv.config()
 
 import fs from 'fs';
 import Redis from 'ioredis';
-import { Executor } from './Executor.mjs';
+import { Publisher } from './Publisher.mjs';
 import { RedisService } from './RedisService.mjs';
 import { WebService, Credential } from './WebService.mjs';
 
 //Register the executor
 const privateKey    = fs.readFileSync(process.env.PRIVATE_KEY || 'keys/webhook-private.key');
-const executor      = new Executor(privateKey);
+const executor      = new Publisher(privateKey);
 const serviceName   = process.env.SERVICE || 'http';
 
 if (process.env.USER_AGENT)
