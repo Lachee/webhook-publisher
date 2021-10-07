@@ -1,5 +1,5 @@
 import Redis from 'ioredis';
-import { EventRequest, Executor } from './Executor.mjs';
+import { EventRequest, Publisher } from './Publisher.mjs';
 export class RedisService {
 
     /** @var {Redis} redis the redis connection. */
@@ -16,7 +16,7 @@ export class RedisService {
 
     /**
      * Creates a new Redis service
-     * @param {Executor} executor the queue that will invoke the events
+     * @param {Publisher} executor the queue that will invoke the events
      * @param {Redis} redis Redis connection
      */
     constructor(executor, redis = null) {
@@ -32,8 +32,10 @@ export class RedisService {
         });
 
         //Define callbacks
-        this.#executor.on('executed', (eventRequest, axiosResponses) => {
-            console.log('executed', eventRequest, axiosResponses);
+        this.#executor.on('published', event => {
+            const { eventRequest, axiosResponses } = event;
+            console.log('published', eventRequest, axiosResponses);
+            
             for(let i in self.#callbacks) {
                 const channel = self.#callbacks[i];
                 if (channel) self.#redis.publish(channel, eventRequest);

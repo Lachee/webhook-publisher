@@ -11,8 +11,10 @@
   "license": "MIT",
   "dependencies": {
     "axios": "^0.21.1",
+    "cors": "^2.8.5",
     "dotenv": "^8.2.0",
     "double-ended-queue": "^2.1.0-0",
+    "express": "^4.17.1",
     "ioredis": "^4.23.0",
     "node-time-uuid": "^0.1.5"
   }

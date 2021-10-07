@@ -3,7 +3,13 @@ import crypto from 'crypto';
 import ObjectId from 'node-time-uuid';
 import Queue from 'double-ended-queue';
 import { EventEmitter } from 'events';
-export class Executor extends EventEmitter {
+import { EventRequest } from './EventRequest.mjs';
+
+/**
+ * Sends all the webhook requests out via axios.
+ * 
+ */
+export class Publisher extends EventEmitter {
 
     userAgent = 'WebhookPub/1.0';
     timeout = 3000;
@@ -50,7 +56,11 @@ export class Executor extends EventEmitter {
 
         //We have started processing
         this.#processing = true;
-        this.emit('beforeExecuted', request);
+
+        // If event was cancelled, then do nothing
+        const beforePublishEvent = { request: request };
+        this.emit('beforePublish', beforePublishEvent);
+        
         //setTimeout(async () => {
             //Build the string payload
             const data = {
@@ -61,7 +71,7 @@ export class Executor extends EventEmitter {
             };
 
             const json      = JSON.stringify(data);
-            const signature = this.#sign(json); 
+            const signature = this.sign(json); 
             const headers = {
                 'Content-Type':         'application/json',
                 'User-Agent':           this.userAgent,
@@ -77,16 +87,31 @@ export class Executor extends EventEmitter {
             //Iterate over all the hosts, generating the appropriate requests
             for(let i in request.hooks) {
                 const hook = request.hooks[i];
-                try {
-                    const url = hook;
-                    console.log(`${request.id}: ${request.event} - ${url}`);
-                    const req = axios.post(url, json, {
-                        timeout: this.timeout, 
-                        headers: headers, 
-                    });   
-                    axiosReqs.push(req);
-                }catch(e) {
-                    console.error(`failed executing hook:`, e, hook);
+                
+                // Invoke the publish event
+                const publishEvent = { 
+                    cancelled:  false,
+                    target:     hook,
+                    data:       data,
+                    body:       body,
+                    signature:  signature,
+                };
+                this.emit('publish', publishEvent);
+
+                // If it wasn't cancelled, then send hte axios request
+                if (!publishEvent.cancelled) {
+                    try {
+                        console.log(`AXIOS ${request.id}: ${request.event} - ${hook}`);
+                        const req = axios.post(hook, json, {
+                            timeout: this.timeout, 
+                            headers: headers, 
+                        });   
+                        axiosReqs.push(req);
+                    }catch(e) {
+                        console.error(`failed executing hook:`, e, hook);
+                    }
+                } else {
+                    console.log(`Cancelled ${request.id}: ${request.event} - ${hook}`);
                 }
             }
 
@@ -95,40 +120,20 @@ export class Executor extends EventEmitter {
 
             //Clean up and try again.
             this.#processing = false;
-            this.emit('executed', request, responses);
+
+            // emit the published event
+            const publishedEvent = { request, responses };
+            this.emit('published', publishedEvent);
+
             this.tryProcessQueue();
         //}, 100); //Artifically delay the process for testing purposes.
     }
 
     /** Signs the payload */
-    #sign(payload) {
+    sign(payload) {
         const sign = crypto.createSign('SHA256');
         sign.write(payload);
         sign.end();
         return sign.sign(this.#privateKey, 'hex');
-    }
-}
-
-/** A event request that we need to publish */
-export class EventRequest {
-    
-    id;
-    timestamp;
-    hooks;
-    event;
-    author;
-    payload;
-
-    constructor(data) { 
-        this.id         = data.id || (new ObjectId()).toString();
-        this.hooks      = data.hooks; //data.hooks.map(h => h instanceof Hook ? h : new Hook(h));
-        this.event      = data.event;
-        this.author     = data.author;
-        this.payload    = data.payload;     
-        this.timestamp  = Date.now();
-
-        if (typeof this.author !== 'string') throw new Error('author must be a string');
-        if (typeof this.event !== 'string') throw new Error('event must be a string');
-        if (typeof this.id !== 'string') throw new Error('id must be a string');
     }
 }
