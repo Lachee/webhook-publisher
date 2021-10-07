@@ -1,10 +1,11 @@
 {
   "name": "webhook-publisher",
-  "version": "1.0.0",
   "description": "Publishes WebHook events on behalf of web apps.",
-  "main": "src/index.mjs",
+  "version": "2.0.0",
+  "main": "src/index.js",
+  "type":"module",
   "scripts": {
-    "start": "node src/index.mjs",
+    "start": "node src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Lachee",
