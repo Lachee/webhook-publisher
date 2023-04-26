@@ -4,4 +4,5 @@ function hello(who: string): string {
     return `Hello ${who}! `;
 }
 
-hello(world);
+const text = hello(world);
+console.log("result:", text);
